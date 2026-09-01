@@ -13,7 +13,7 @@ will be in yellow. Then it hands you off to the retailer's own site to buy.
 
 > **Status: pre-code.** This repository currently holds the plan, the evidence
 > behind it, and the architecture it implies. Nothing is built yet. That is
-> deliberate — [three experiments](docs/ROADMAP.md#0b-falsify-the-thesis-before-building-anything)
+> deliberate — [four experiments](docs/ROADMAP.md#0b-falsify-the-thesis-before-building-anything)
 > could still kill this thesis, and they cost two weeks instead of two quarters.
 
 ---
@@ -87,6 +87,35 @@ the only asset in this product a competitor cannot clone in a sprint.
 
 That claim is also **the least verified thing in this document**, which is why
 testing it against every incumbent is the first task in the plan, before any code.
+And the bar just rose: Shopify's free catalogue API already returns
+*"Suitable for haldi, mehendi, and other traditional events"* as vendor metadata.
+Aura has to beat a free field plus a good retriever — not nothing.
+
+---
+
+## The central tension
+
+> **Supply and monetisation are two disjoint sets, and the free one is the wrong
+> one.**
+
+Getting product data turned out to be trivial. Shopify's Global Catalog MCP is
+open and unauthenticated — a live probe returned 443 Indian haldi-appropriate
+kurta sets in INR with sizes, stock and deep links, no API key, no approval, no
+fee. Integration is under a developer-day.
+
+But of 69 Indian D2C sellers sampled from that catalogue, **2 had an affiliate
+programme.** Eight on the most generous test. Meanwhile the merchants that *do*
+pay — Myntra, Ajio, Amazon.in — publish no product feed at all.
+
+So the failure mode isn't technical and isn't legal. **It's that Aura will
+recommend, beautifully and correctly, from a catalogue it has no affiliate link
+for** — and every incentive in the build pulls that way, because the free API is
+also the fun one with the pretty long-tail brands and the occasion tags already
+written for you.
+
+This is why the plan inverts the usual order. Not *"what catalogue can I get?"* —
+the answer is "almost all of it, free, today." Instead: **"which merchants will
+actually pay me?"** That list is the business. Everything else is index.
 
 ---
 
@@ -129,7 +158,7 @@ notification-fatigue problem: relevance comes from the user's own calendar
 instead of from a messaging allowance.
 
 Whether users volunteer future occasions unprompted is
-[a measured Phase 2 gate](docs/ROADMAP.md#phase-2--pilot-does-anyone-actually-want-this).
+[a measured Phase 2 gate](docs/ROADMAP.md#phase-2--pilot-does-anyone-want-this-and-will-they-buy-today).
 
 ---
 
@@ -170,16 +199,17 @@ catalogue-side AI (which is nearly free) does the heavy lifting offline.
 
 | Layer | Choice |
 |---|---|
-| Catalogue | Shopify/D2C feeds first — affiliate networks supply **links, not catalogues** |
+| Catalogue | `/products.json` for merchants that pay; Shopify Global Catalog MCP for breadth |
 | Store | Postgres + pgvector |
 | Retrieval | Hybrid BM25 + vector, RRF fusion |
 | Embeddings | Marqo-FashionSigLIP, self-hosted (~20 pts over generic CLIP on LookBench) |
 | Hot-path LLM | Smallest model that passes eval |
 | Persona | Deterministic weighted scoring — not bandits, until the feedback volume justifies them |
+| Alert transport | Push. **Never WhatsApp broadcast** — it loses 80–96% per send |
 
-Infrastructure runs ~$59/month at 100 MAU and ~$1,132 at 10k. **Messaging, not
-compute, is the dominant variable cost** — WhatsApp marketing templates in India
-cost ~₹1.09 each, which at three alerts a week is ~₹167–182 per user per year.
+Infrastructure runs ~$59/month at 100 MAU and ~$1,132 at 10k — which is not the
+binding cost. **Reach is.** At ₹1.09 per WhatsApp marketing template against a
+modelled EPC of ₹0.47, 100 sends cost ₹109 and return ₹4.70. Push is free.
 
 Full detail and every price: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -189,11 +219,11 @@ Full detail and every price: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Phase | P50 | Gate | Kills it |
 |---|---:|---|---|
-| **0 · Foundation + falsification** | 2–3 wk | Clocks started; thesis survives | Incumbents already handle occasions, or net commission <4%, or affiliate terms prohibit AI agents |
-| **1 · PoC** | 5 wk | Relevance — top-5 hit ≥60% on a stylist-authored golden set | Top-5 hit <40%, or no merchant feed live |
-| **2 · Pilot** | 4 wk | Desire — ≥8% CTR on hand-sent alerts, ≥1 reconciled conversion | Alert CTR <3%, or 0 conversions in 200+ clicks |
-| **3 · Private beta** | 7 wk | Retention — ≥25% still opening alerts at week 4 | Week-4 retention <12%, or link validity <90% |
-| **4 · MVP** | 5 wk | Unit economics — attributed GMV ≥3× messaging + inference cost | Commission per user below cost after 6 weeks |
+| **0 · Foundation + falsification** | 2–3 wk | Clocks started; thesis survives | Fewer than 20 monetisable merchants, incumbents already handle occasions, net commission <4%, or affiliate terms prohibit AI agents |
+| **1 · PoC** | 5 wk | Coverage + relevance — ≥20 merchants with a confirmed ₹1 test payout, ≥40% of results carrying a live affiliate link, top-5 hit ≥60% | <20 monetisable merchants, or top-5 hit <40% |
+| **2 · Pilot** | 4 wk | Desire — ≥8% CTR on hand-sent contact, ≥1 reconciled conversion | CTR <3%, or 0 conversions in 200+ clicks |
+| **3 · Private beta** | 7 wk | Retention — ≥25% still opening notifications at week 4 | Week-4 retention <12%, or link validity <90% |
+| **4 · MVP** | 5 wk | Unit economics — attributed GMV ≥3× inference + messaging cost, on reconciled receipts | <15 paid orders in 90 days across 20 merchants |
 | **5 · Product** | open | A repeatable channel with CAC payback <6 months | No such channel in 12 weeks |
 
 **PoC start → MVP gate: ~21 weeks at P50, ~30 at P80, for two people.**
@@ -214,20 +244,41 @@ Full plan: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
-## Business model
+## Business model — and the hardest number in this repo
 
-Affiliate commission. Asset-light, the same model Daydream validated — and the
-same one that has not yet produced a consumer breakout, which is why the
-[unit-economics gate](docs/ROADMAP.md#phase-4--mvp-public-launch) is a hard
-phase boundary rather than a footnote.
+Affiliate commission. Asset-light, the same model Daydream validated, and the same
+one that has not yet produced a consumer breakout.
 
-Commission must be modelled **net of returns**: Indian fashion return rates run
-**25–40%**, national RTO ~23%. A 7% headline rate at a 30% return rate realises
-~4.9% before attribution leakage.
+The economics are worse than the pitch assumed, in four compounding ways:
+
+| | |
+|---|---|
+| **Rate** | Cuelinks' real Myntra rate is **7.5% new / 3.75% existing**. Aura's user is *by definition* an existing Myntra customer. Blended net: **5.0%** |
+| **Cookie** | **1 day** on Myntra, Ajio and Amazon.in — against a **10-day** median click-to-sale |
+| **Returns** | Commission is paid on **delivered**, not ordered, GMV. At 25–40% fashion returns and 23% RTO, **~30% evaporates** |
+| **Cash** | Lands **4–5.5 months** after the sale |
+
+Which produces:
+
+```
+EPC                       ₹0.47 (base)  →  ₹1.42 (optimistic)
+Revenue / MAU / month     ₹0.21         →  ₹1.42
+Break-even, founders unpaid   190,000 MAU  →  28,000 MAU
+```
+
+Global average affiliate EPC is ~₹40. **Aura's is about 1% of that** — not an
+error; the global figure is dominated by finance, travel and SaaS. India fashion
+at ₹1,800 AOV cannot produce a dollar-scale EPC.
+
+**First revenue gate: ₹1,000 ≈ 11–15 delivered, attributed orders.** Time-boxed —
+if 20 monetisable merchants and 90 days of real usage don't produce 15 paid
+orders, the affiliate model is disconfirmed and the revenue line has to change.
 
 **North-star metric:** percentage of weekly active users who engage with a
-proactive, persona-matched contact and click through to a retailer. It proves the
-persona engine and the retention loop in one number.
+proactive, persona-matched contact and click through to a retailer.
+
+**Guardrail metric, tracked from day one:** *percentage of recommendations shown
+that carry a live affiliate link.* Below 40%, this is a hobby.
 
 ---
 
@@ -249,19 +300,28 @@ aura-platform/
 The things that would most change this plan, ranked. None can be settled by more
 desk research — each needs a conversation or an experiment.
 
-1. **What is the actual net affiliate rate** for Indian fashion after category
-   caps, new-vs-repeat tiers and network revenue share? If it's 3–4% rather than
-   4–10%, the unit economics are wrong.
+1. **How many Indian fashion merchants actually run an affiliate programme?**
+   Admitad India's feed page says "Advertisers found: 200" — how many are Indian
+   *and* fashion is invisible without a publisher account. **This number sizes the
+   business.**
 2. **Do affiliate network terms permit an AI agent** to ingest and re-present
    merchant catalogue data? No public policy exists either way. It is binary.
-3. **How good are Myntra Maya, Flipkart SLAP and Rufus India at real occasion
-   queries?** Twenty prompts, graded. This is the thesis.
-4. **Why did Alle pivot six times?** The founders are reachable.
-5. **Will Meta classify a persona-matched recommendation template as marketing or
-   utility?** A ~7× swing in the cost of proactive contact.
-6. **Does a pure-AI stylist clear India's trust bar**, given 76% of Indian
-   consumers want interactions to feel human, and Stylz deliberately pairs AI with
-   human stylists?
+3. **Does GoAffPro or UpPromote expose a publisher-side discovery API?** If one
+   integration could enumerate and join hundreds of small Indian D2C programmes,
+   affiliate coverage of the free catalogue goes from ~3% to something viable.
+   **This would be the highest-value engineering task in the project.**
+4. **What fraction of Indian affiliate clicks survive app-to-web attribution?**
+   No public data exists. The 50% estimate in the model swings revenue 2×.
+5. **How good are Myntra Maya, Flipkart SLAP and Rufus India at real occasion
+   queries?** Twenty prompts, graded. Still the thesis.
+6. **Is "save it and decide later" compatible with a 1-day cookie at all?** That
+   is the natural shape of occasion shopping, and it may be structurally
+   incompatible with getting paid.
+7. **Why did Alle pivot six times?** The founders are reachable.
+8. **When do Shopify "promoted placements" ship, and what do they pay?** Announced
+   17 Jun 2026 as a *future* path for developers to earn on catalogue-driven
+   sales. If it lands, it collapses the tension above — the single
+   highest-leverage external event to watch.
 
 ---
 

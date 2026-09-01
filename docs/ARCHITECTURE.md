@@ -46,19 +46,41 @@ nano/lite tier is underwater.
 
 ---
 
-## 1. Catalogue: the gating dependency
+## 1. Catalogue: solved, free — and the wrong half
 
-Nothing else in this document matters until this is solved. Affiliate networks
-in India sell *link conversion and reporting*, not product data — Cuelinks'
-developer API has 33 endpoints and **no SKU feed**. Myntra and Ajio have no
-self-serve affiliate programme at all. Amazon's PA-API 5.0 was retired on
-15 May 2026, and its replacement requires ~10 qualified sales in a rolling
-30-day window — you need converting traffic *before* you get catalogue access.
+**Catalogue acquisition stopped being the hard problem on 17 June 2026.**
+Shopify's Global Catalog MCP (`catalog.shopify.com/api/ucp/mcp`) is open and
+unauthenticated: a live probe on 31 Aug 2026 returned **443 Indian yellow-kurta
+results** in INR with sizes, per-variant stock, images, deep links and seller
+identity — no API key, no approval, no fee. Integration cost is **under one
+developer-day**. Individual stores also serve `/products.json` unauthenticated
+(7 of 10 major Indian D2C brands tested), and Shopify's 2026 default `robots.txt`
+explicitly permits catalogue crawling while forbidding only automated checkout —
+which Aura already excludes.
 
-**PoC source of record: Shopify/D2C India fashion brands.** They are the only
-clean, legal, structured, free feed a small team can obtain, and brand-direct
-commission is materially better than marketplace rates. Marketplace coverage
-comes later, through a normalising aggregator or a commercial feed vendor.
+**The problem moved.** Of 69 Indian D2C sellers sampled from that catalogue,
+**2 (2.9%)** had a detectable affiliate programme — 8 (11%) on the most generous
+test. Meanwhile Myntra, Ajio and Amazon.in *do* pay but publish **no product
+feed**.
+
+> **Supply and monetisation are two disjoint sets.** Architect accordingly: the
+> index is not the business, the merchant list is.
+
+Three sources, three distinct jobs:
+
+| Source | Job | Constraint |
+|---|---|---|
+| **Affiliate network feeds** (Admitad India et al.) | Defines which merchants exist | The only route where a SKU arrives monetisable |
+| **Per-store `/products.json`** | The working index — but **only for merchants that pay** | Free, full depth, own refresh cadence |
+| **Shopify Global Catalog MCP** | Breadth and demos | **Search endpoint, not a feed** — `total_count` caps at ~400–500 per query, so you cannot mirror the corpus or build offline embeddings over it, and ranking quality is capped by Shopify's relevance, not yours |
+
+For Myntra, Ajio and Amazon.in, do **not** build a catalogue. Resolve them at
+conversation time as **link targets only**, via search deep links wrapped in an
+affiliate link.
+
+**Track `% of recommendations shown that carry a live affiliate link` as a
+first-class system metric.** Below 40%, the product is a hobby. Never let a demo
+metric mix paid and unpaid inventory.
 
 ```
 merchant feed (Shopify / XML / CSV)
@@ -320,12 +342,20 @@ Images: hotlink retailer CDNs where affiliate terms permit; otherwise cache
 thumbnails on Cloudflare R2 (zero egress — 5M thumbnails at 30 KB ≈ 150 GB ≈
 $2.25/month). Never self-host image serving.
 
-**Note what is missing from this table: WhatsApp.** At India's 2026 marketing
-rate (₹0.8631 + 18% GST + BSP markup ≈ ₹1.09/message), 3 alerts/week costs
-~₹160/user/year — which at 10k MAU is roughly **₹1.6M/year, an order of
-magnitude above all the infrastructure above combined**. Messaging, not compute,
-is the dominant variable cost of this product. See [ROADMAP.md](ROADMAP.md) §
-Phase 2.
+**Note what is missing from this table: WhatsApp — and it stays missing.** At
+₹1.09 all-in per delivered marketing template against a modelled EPC of ₹0.47,
+100 sends cost ₹109 and return ₹4.70. **Aura recovers 4–20% of its own send cost
+and loses money on every broadcast.** Break-even would need an EPC of ₹10.90 —
+23× the base case.
+
+Push notifications are free, show ~4× open-rate lift when personalised, and carry
+better published retention evidence. **Push is the alert transport. WhatsApp is
+reserved for service-window messages only.** See [ROADMAP.md](ROADMAP.md)
+§ Phase 3.
+
+The wider point stands and is worth internalising: **at this AOV and commission
+rate, any per-message channel is unaffordable.** Infrastructure is not the
+binding cost — reach is.
 
 ---
 
@@ -351,7 +381,8 @@ queries; Pinterest Lens ~600M visual searches per month.
 
 | Layer | Choice | Change when |
 |---|---|---|
-| Catalogue source | Shopify/D2C feeds | Marketplace feed access is confirmed in writing |
+| Catalogue source | `/products.json` for merchants that pay; Global Catalog MCP for breadth | Affiliate coverage of shown results drops below 40% |
+| Alert transport | Push (free) | Never WhatsApp broadcast — it loses 80–96% per send |
 | Store | Postgres + pgvector | p95 filtered query >300 ms, or >5M vectors |
 | Retrieval | BM25 + vector, RRF fusion | Golden-set NDCG plateaus below target |
 | Embeddings | Marqo-FashionSigLIP, self-hosted | A fashion-tuned model beats it on LookBench |
